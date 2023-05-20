@@ -28,7 +28,7 @@ import static net.minecraft.util.math.Direction.DOWN;
 
 public class CraftingTableBlockEntity extends LockableContainerBlockEntity implements SidedInventory, RecipeUnlocker, RecipeInputProvider {
 
-    private static final int[] OUTPUT_SLOTS = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    private static final int[] OUTPUT_SLOTS = {0};
     private static final int[] INPUT_SLOTS = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
     private final List<AutoCraftingTableContainer> openContainers = new ArrayList<>();
@@ -77,7 +77,7 @@ public class CraftingTableBlockEntity extends LockableContainerBlockEntity imple
 
     @Override
     public int[] getAvailableSlots(Direction dir) {
-        return (dir == DOWN && (!output.isEmpty() || getCurrentRecipe().isPresent())) ? OUTPUT_SLOTS : INPUT_SLOTS;
+        return dir == DOWN ? OUTPUT_SLOTS : INPUT_SLOTS;
     }
 
     @Override
