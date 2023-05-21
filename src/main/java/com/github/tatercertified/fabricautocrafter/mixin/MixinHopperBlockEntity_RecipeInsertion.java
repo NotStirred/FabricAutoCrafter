@@ -1,5 +1,6 @@
 package com.github.tatercertified.fabricautocrafter.mixin;
 
+import com.github.tatercertified.fabricautocrafter.AutoCrafterMod;
 import com.github.tatercertified.fabricautocrafter.CraftingTableBlockEntity;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.HopperBlockEntity;
@@ -25,6 +26,16 @@ import java.util.Arrays;
 
 @Mixin(HopperBlockEntity.class)
 public abstract class MixinHopperBlockEntity_RecipeInsertion {
+    private static final int[] WIDTH_1_LUT = new int[] { 0, 3, 6 };
+    private static final int[] WIDTH_2_LUT = new int[] { 0, 1, 3, 4, 6, 7 };
+    private static final int[] WIDTH_3_LUT = new int[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
+    private static final int[][] WIDTH_LUTS = new int[][] {
+            new int[] {},
+            WIDTH_1_LUT,
+            WIDTH_2_LUT,
+            WIDTH_3_LUT,
+    };
+
     @Shadow
     private static ItemStack transfer(@Nullable Inventory from, Inventory to, ItemStack stack, int slot, @Nullable Direction side) {
         throw new IllegalStateException("Mixin failed to apply");
@@ -73,10 +84,21 @@ public abstract class MixinHopperBlockEntity_RecipeInsertion {
         }
         DefaultedList<Ingredient> ingredients = recipe.getIngredients();
 
+        int recipeWidth = 3;
+        if (recipe instanceof ShapedRecipe) {
+            // width must be > 0 && < 3
+            recipeWidth = Math.min(3, Math.max(1, ((ShapedRecipe) recipe).getWidth()));
+        }
+        int[] widthLUT = WIDTH_LUTS[recipeWidth];
+        if (ingredients.size() > widthLUT.length) { // Something has gone very wrong, exit early
+            AutoCrafterMod.LOGGER.error(String.format("Recipe has more ingredients %d than expected %d", ingredients.size(), widthLUT.length));
+            return stack;
+        }
+
         // given each item in this inventory, find the first stack which is valid for the recipe, and move it
         for (int ingIdx = 0; ingIdx < ingredients.size(); ingIdx++) {
             Ingredient ingredient = ingredients.get(ingIdx);
-            int dstIdx = ingIdx + 1; // CraftingTableBlockEntity input starts at slot 1
+            int dstIdx = widthLUT[ingIdx] + 1; // CraftingTableBlockEntity input starts at slot 1
             ItemStack dstStack = to.getStack(dstIdx);
             ItemStack finalStack = stack; // java is dumb
             if (Arrays.stream(ingredient.getMatchingStacks()).anyMatch(ingStack -> ingStack.getItem().equals(finalStack.getItem()))

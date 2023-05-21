@@ -15,10 +15,13 @@ import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents.modifyEntriesEvent;
 
 public class AutoCrafterMod implements ModInitializer {
+    public static final Logger LOGGER = LoggerFactory.getLogger("autocrafter");
 
     public static final Identifier IDENTIFIER = new Identifier("autocrafter", "autocrafter");
     public static final Block BLOCK = new AutoCrafter(FabricBlockSettings.of(Material.WOOD).strength(2.5f, 2.5f));
