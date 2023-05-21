@@ -1,5 +1,6 @@
 package com.github.tatercertified.fabricautocrafter;
 
+import com.github.tatercertified.fabricautocrafter.mixin.AccessRecipeManager;
 import com.github.tatercertified.fabricautocrafter.mixin.CraftingInventoryMixin;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.LockableContainerBlockEntity;
@@ -203,13 +204,12 @@ public class CraftingTableBlockEntity extends LockableContainerBlockEntity imple
         RecipeManager manager = this.world.getRecipeManager();
 
         if (lastRecipe != null) {
-            CraftingRecipe mapRecipe = manager.getAllOfType(RecipeType.CRAFTING).get(lastRecipe);
+            CraftingRecipe mapRecipe = ((AccessRecipeManager) manager).invokeGetAllOfType(RecipeType.CRAFTING).get(lastRecipe);
             if (mapRecipe != null && mapRecipe.matches(craftingInventory, world)) {
                 return Optional.of(lastRecipe);
             }
         }
-        Optional<CraftingRecipe> recipe = manager.getFirstMatch(RecipeType.CRAFTING, craftingInventory, world);
-        return recipe;
+        return manager.getFirstMatch(RecipeType.CRAFTING, craftingInventory, world);
     }
 
     private ItemStack craft() {

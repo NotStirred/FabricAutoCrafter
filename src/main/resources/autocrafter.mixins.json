@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_17",
   "mixins": [
     "AccessorScreenHandler",
+    "AccessRecipeManager",
     "CraftingInventoryMixin",
     "MixinHopperBlockEntity",
     "MixinHopperBlockEntity_RecipeInsertion"
