@@ -5,7 +5,8 @@
   "mixins": [
     "AccessorScreenHandler",
     "CraftingInventoryMixin",
-    "MixinHopperBlockEntity"
+    "MixinHopperBlockEntity",
+    "MixinHopperBlockEntity_RecipeInsertion"
   ],
   "injectors": {
     "defaultRequire": 1

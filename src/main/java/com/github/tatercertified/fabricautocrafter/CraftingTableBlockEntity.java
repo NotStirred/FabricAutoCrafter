@@ -10,13 +10,18 @@ import net.minecraft.inventory.Inventories;
 import net.minecraft.inventory.SidedInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtString;
 import net.minecraft.recipe.*;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.ItemScatterer;
 import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.world.World;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +40,7 @@ public class CraftingTableBlockEntity extends LockableContainerBlockEntity imple
     private final CraftingInventory craftingInventory = new CraftingInventory(null, 3, 3);
     public DefaultedList<ItemStack> inventory;
     public ItemStack output = ItemStack.EMPTY;
-    private Recipe<?> lastRecipe;
+    private final StoredRecipe lastRecipe = new StoredRecipe(); // last recipe is lazy loaded, to prevent crash on world load if loaded in readNbt
 
     public CraftingTableBlockEntity(BlockPos pos, BlockState state) {
         super(TYPE, pos, state);
@@ -54,6 +59,12 @@ public class CraftingTableBlockEntity extends LockableContainerBlockEntity imple
         super.writeNbt(tag);
         Inventories.writeNbt(tag, inventory);
         tag.put("Output", output.writeNbt(new NbtCompound()));
+
+        if (lastRecipe.recipe.isPresent()) {
+            Identifier id = lastRecipe.recipe.get().getId();
+            tag.put("lockedRecipeNamespace", NbtString.of(id.getNamespace()));
+            tag.put("lockedRecipePath", NbtString.of(id.getPath()));
+        }
     }
 
     @Override
@@ -61,6 +72,15 @@ public class CraftingTableBlockEntity extends LockableContainerBlockEntity imple
         super.readNbt(tag);
         Inventories.readNbt(tag, inventory);
         this.output = ItemStack.fromNbt(tag.getCompound("Output"));
+
+        if (tag.contains("lockedRecipeNamespace") && tag.contains("lockedRecipePath")) {
+            NbtElement lockedRecipeNamespace = tag.get("lockedRecipeNamespace");
+            NbtElement lockedRecipePath = tag.get("lockedRecipePath");
+            if (lockedRecipeNamespace instanceof NbtString && lockedRecipePath instanceof NbtString) {
+                this.lastRecipe.lockedRecipeNamespace = Optional.of(lockedRecipeNamespace.asString());
+                this.lastRecipe.lockedRecipePath = Optional.of(lockedRecipePath.asString());
+            }
+        }
     }
 
     @Override
@@ -163,12 +183,11 @@ public class CraftingTableBlockEntity extends LockableContainerBlockEntity imple
 
     @Override
     public void setLastRecipe(Recipe<?> recipe) {
-        lastRecipe = recipe;
     }
 
-    @Override
+    @Override @Nullable
     public Recipe<?> getLastRecipe() {
-        return lastRecipe;
+        return lastRecipe.getRecipe(this.world).orElse(null);
     }
 
     @Override
@@ -190,7 +209,6 @@ public class CraftingTableBlockEntity extends LockableContainerBlockEntity imple
             }
         }
         Optional<CraftingRecipe> recipe = manager.getFirstMatch(RecipeType.CRAFTING, craftingInventory, world);
-        recipe.ifPresent(this::setLastRecipe);
         return recipe;
     }
 
@@ -219,6 +237,7 @@ public class CraftingTableBlockEntity extends LockableContainerBlockEntity imple
             }
         }
         markDirty();
+        lastRecipe.recipe = Optional.of(recipe);
         return result;
     }
 
@@ -229,5 +248,22 @@ public class CraftingTableBlockEntity extends LockableContainerBlockEntity imple
 
     public void onContainerClose(AutoCraftingTableContainer container) {
         this.openContainers.remove(container);
+    }
+
+    static final class StoredRecipe {
+        private Optional<String> lockedRecipeNamespace = Optional.empty();
+        private Optional<String> lockedRecipePath = Optional.empty();
+        private Optional<Recipe<?>> recipe = Optional.empty();
+
+        Optional<? extends Recipe<?>> getRecipe(World world) {
+            if (recipe.isPresent()) {
+                return recipe;
+            }
+
+            if (lockedRecipeNamespace.isEmpty() || lockedRecipePath.isEmpty()) {
+                return Optional.empty();
+            }
+            return world.getRecipeManager().get(new Identifier(lockedRecipeNamespace.get(), lockedRecipePath.get()));
+        }
     }
 }

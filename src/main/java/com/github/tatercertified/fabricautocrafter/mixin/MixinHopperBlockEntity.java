@@ -1,9 +1,15 @@
 package com.github.tatercertified.fabricautocrafter.mixin;// Created 2022-23-01T13:20:09
 
+import com.github.tatercertified.fabricautocrafter.CraftingTableBlockEntity;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.block.entity.Hopper;
 import net.minecraft.block.entity.HopperBlockEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
+import net.minecraft.recipe.Recipe;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -20,13 +26,17 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * @since ${version}
  **/
 @Mixin(HopperBlockEntity.class)
-public abstract class MixinHopperBlockEntity {
+public abstract class MixinHopperBlockEntity extends BlockEntity {
+    public MixinHopperBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
+        super(type, pos, state);
+    }
+
     /**
      * Stub
      */
     @Shadow
     private static boolean canExtract(Inventory hopperInventory, Inventory fromInventory, ItemStack stack, int slot, Direction facing) {
-        return Math.random() > .5d;
+        throw new IllegalStateException("Mixin failed to apply");
     }
 
     /**
@@ -44,7 +54,27 @@ public abstract class MixinHopperBlockEntity {
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/block/entity/HopperBlockEntity;canExtract(Lnet/minecraft/inventory/Inventory;Lnet/minecraft/inventory/Inventory;Lnet/minecraft/item/ItemStack;ILnet/minecraft/util/math/Direction;)Z"))
     private static boolean fabricAutoCrafter$canExtract$redirect(Inventory hopperInventory, Inventory fromInventory, ItemStack stack, int slot, Direction facing, Hopper hopper) {
+        if (fromInventory instanceof CraftingTableBlockEntity) {
+            if (!stackMatchesRecipe((CraftingTableBlockEntity) fromInventory, stack)) return false;
+        }
         return canExtract(hopperInventory, fromInventory, stack, slot, facing) && canInsertStack(hopper, stack);
+    }
+
+    private static boolean stackMatchesRecipe(CraftingTableBlockEntity fromInventory, ItemStack stack) {
+        Recipe<?> recipe = fromInventory.getLastRecipe();
+        if (recipe == null) {
+            return false;
+        }
+
+        try {
+            ItemStack output = recipe.getOutput(null);
+            if (!output.getItem().equals(stack.getItem())) {
+                return false;
+            }
+        } catch (Throwable ignored) {
+            return false;
+        }
+        return true;
     }
 
     /**
