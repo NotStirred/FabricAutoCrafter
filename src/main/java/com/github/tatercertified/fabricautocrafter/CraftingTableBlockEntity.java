@@ -61,8 +61,9 @@ public class CraftingTableBlockEntity extends LockableContainerBlockEntity imple
         Inventories.writeNbt(tag, inventory);
         tag.put("Output", output.writeNbt(new NbtCompound()));
 
-        if (lastRecipe.recipe.isPresent()) {
-            Identifier id = lastRecipe.recipe.get().getId();
+        Optional<? extends Recipe<?>> recipe = lastRecipe.getRecipe(this.world);
+        if (recipe.isPresent()) {
+            Identifier id = recipe.get().getId();
             tag.put("lockedRecipeNamespace", NbtString.of(id.getNamespace()));
             tag.put("lockedRecipePath", NbtString.of(id.getPath()));
         }
