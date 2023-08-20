@@ -5,12 +5,13 @@ import com.github.tatercertified.fabricautocrafter.CraftingTableBlockEntity;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.HopperBlockEntity;
 import net.minecraft.inventory.Inventory;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.recipe.Ingredient;
 import net.minecraft.recipe.Recipe;
 import net.minecraft.recipe.ShapedRecipe;
-import net.minecraft.util.collection.DefaultedList;
+import net.minecraft.recipe.SpecialCraftingRecipe;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
@@ -22,7 +23,11 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
+import java.util.AbstractList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Mixin(HopperBlockEntity.class)
 public abstract class MixinHopperBlockEntity_RecipeInsertion {
@@ -82,10 +87,16 @@ public abstract class MixinHopperBlockEntity_RecipeInsertion {
         if (recipe == null) {
             return stack;
         }
-        DefaultedList<Ingredient> ingredients = recipe.getIngredients();
+        AbstractList<Ingredient> ingredients = recipe.getIngredients();
 
         int recipeWidth = 3;
-        if (recipe instanceof ShapedRecipe) {
+        if (recipe instanceof SpecialCraftingRecipe) {
+            Optional<List<Item>> specialRecipeItems = to.getSpecialRecipeItems();
+            if (specialRecipeItems.isPresent()) {
+                List<Item> items = specialRecipeItems.get();
+                ingredients = (AbstractList<Ingredient>) items.stream().map(Ingredient::ofItems).collect(Collectors.toList());
+            }
+        } else if (recipe instanceof ShapedRecipe) {
             // width must be > 0 && < 3
             recipeWidth = Math.min(3, Math.max(1, ((ShapedRecipe) recipe).getWidth()));
         }
