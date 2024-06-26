@@ -273,23 +273,25 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
         if (optionalRecipe.isEmpty()) return ItemStack.EMPTY;
 
         final CraftingRecipe recipe = optionalRecipe.get();
-        if (recipe instanceof SpecialCraftingRecipe) {
-            lastRecipe.inputItems = craftingInventory.getHeldStacks().subList(1, craftingInventory.getHeldStacks().size()).stream().map(ItemStack::getItem).collect(Collectors.toList());
+        if (recipe instanceof SpecialCraftingRecipe || recipe instanceof ShapelessRecipe) {
+            lastRecipe.inputItems = craftingInventory.getHeldStacks().subList(0, craftingInventory.getHeldStacks().size()).stream().map(ItemStack::getItem).collect(Collectors.toList());
         } else {
             lastRecipe.inputItems = null;
         }
-        final CraftingRecipeInput input = craftingInventory.createRecipeInput();
-        final ItemStack result = recipe.craft(input, this.getWorld().getRegistryManager());
-        final DefaultedList<ItemStack> remaining = world.getRecipeManager().getRemainingStacks(RecipeType.CRAFTING, input, world);
-        for (int i = 0; i < 9; i++) {
-            ItemStack current = inventory.get(i);
+        final CraftingRecipeInput.Positioned input = craftingInventory.createPositionedRecipeInput();
+        final ItemStack result = recipe.craft(input.input(), this.getWorld().getRegistryManager());
+        final DefaultedList<ItemStack> remaining = world.getRecipeManager().getRemainingStacks(RecipeType.CRAFTING, input.input(), world);
+        for (int i = 0; i < input.input().getSize(); i++) {
+            int startIdx =  input.left() + input.top() * 3;
+                int idxWithinInv = startIdx + LUTUtil.WIDTH_LUTS[input.input().getWidth()][i];
+            ItemStack current = inventory.get(idxWithinInv);
             ItemStack remainingStack = remaining.get(i);
             if (!current.isEmpty()) {
                 current.decrement(1);
             }
             if (!remainingStack.isEmpty()) {
                 if (current.isEmpty()) {
-                    inventory.set(i, remainingStack);
+                    inventory.set(idxWithinInv, remainingStack);
                 } else if (ItemStack.areItemsAndComponentsEqual(current, remainingStack)) {
                     current.increment(remainingStack.getCount());
                 } else {
@@ -298,6 +300,7 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
             }
         }
         markDirty();
+        lastRecipe.recipe = Optional.of(new RecipeEntry<Recipe<?>>(Identifier.of(""), recipe));
         return result;
     }
 

@@ -7,11 +7,7 @@ import net.minecraft.inventory.Inventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.recipe.Ingredient;
-import net.minecraft.recipe.RecipeEntry;
-import net.minecraft.recipe.ShapedRecipe;
-import net.minecraft.recipe.SpecialCraftingRecipe;
-import net.minecraft.util.collection.DefaultedList;
+import net.minecraft.recipe.*;
 import net.minecraft.util.math.Direction;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
@@ -20,24 +16,14 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-import java.util.AbstractList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
+
+import static com.github.tatercertified.fabricautocrafter.LUTUtil.WIDTH_LUTS;
 
 @Mixin(HopperBlockEntity.class)
 public class MixinHopperBlockEntity_RecipeInsertion {
-    private static final int[] WIDTH_1_LUT = new int[] { 0, 3, 6 };
-    private static final int[] WIDTH_2_LUT = new int[] { 0, 1, 3, 4, 6, 7 };
-    private static final int[] WIDTH_3_LUT = new int[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
-    private static final int[][] WIDTH_LUTS = new int[][] {
-            new int[] {},
-            WIDTH_1_LUT,
-            WIDTH_2_LUT,
-            WIDTH_3_LUT,
-    };
-
     @Shadow
     private static ItemStack transfer(@Nullable Inventory from, Inventory to, ItemStack stack, int slot, @Nullable Direction side) {
         throw new IllegalStateException("Mixin failed to apply");
@@ -62,14 +48,14 @@ public class MixinHopperBlockEntity_RecipeInsertion {
         if (recipe == null) {
             return stack;
         }
-        AbstractList<Ingredient> ingredients = recipe.value().getIngredients();
+        List<Ingredient> ingredients = recipe.value().getIngredients();
 
         int recipeWidth = 3;
-        if (recipe.value() instanceof SpecialCraftingRecipe) {
+        if (recipe.value() instanceof SpecialCraftingRecipe || recipe.value() instanceof ShapelessRecipe) {
             Optional<List<Item>> specialRecipeItems = to.getSpecialRecipeItems();
             if (specialRecipeItems.isPresent()) {
                 List<Item> items = specialRecipeItems.get();
-                ingredients = (AbstractList<Ingredient>) items.stream().map(Ingredient::ofItems).toList();
+                ingredients = items.stream().map(Ingredient::ofItems).toList();
             }
         } else if (recipe.value() instanceof ShapedRecipe) {
             // width must be > 0 && < 3
