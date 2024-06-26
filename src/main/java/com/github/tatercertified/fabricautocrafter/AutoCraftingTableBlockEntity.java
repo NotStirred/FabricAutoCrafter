@@ -10,15 +10,19 @@ import net.minecraft.inventory.Inventories;
 import net.minecraft.inventory.SidedInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtString;
 import net.minecraft.recipe.*;
 import net.minecraft.recipe.input.CraftingRecipeInput;
 import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.ItemScatterer;
 import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -32,7 +36,7 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
     private final CraftingInventory craftingInventory = new CraftingInventory(null, 3, 3);
     public DefaultedList<ItemStack> inventory;
     private ItemStack output = ItemStack.EMPTY;
-    private RecipeEntry<?> lastRecipe;
+    private final StoredRecipe lastRecipe = new StoredRecipe(); // last recipe is lazy loaded, to prevent crash on world load if loaded in readNbt
 
     public AutoCraftingTableBlockEntity(BlockPos pos, BlockState state) {
         super(AutoCrafterMod.TYPE, pos, state);
@@ -52,6 +56,12 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
         if (!output.isEmpty()) {
             nbt.put("Output", output.encode(registryLookup));
         }
+
+        if (lastRecipe.recipe.isPresent()) {
+            Identifier id = lastRecipe.recipe.get().id();
+            nbt.put("lockedRecipeNamespace", NbtString.of(id.getNamespace()));
+            nbt.put("lockedRecipePath", NbtString.of(id.getPath()));
+        }
     }
 
     @Override
@@ -59,6 +69,15 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
         super.readNbt(nbt, registryLookup);
         Inventories.readNbt(nbt, inventory, registryLookup);
         this.output = ItemStack.fromNbtOrEmpty(registryLookup, nbt.getCompound("Output"));
+
+        if (nbt.contains("lockedRecipeNamespace") && nbt.contains("lockedRecipePath")) {
+            NbtElement lockedRecipeNamespace = nbt.get("lockedRecipeNamespace");
+            NbtElement lockedRecipePath = nbt.get("lockedRecipePath");
+            if (lockedRecipeNamespace instanceof NbtString && lockedRecipePath instanceof NbtString) {
+                this.lastRecipe.lockedRecipeNamespace = Optional.of(lockedRecipeNamespace.asString());
+                this.lastRecipe.lockedRecipePath = Optional.of(lockedRecipePath.asString());
+            }
+        }
     }
 
     @Override
@@ -175,12 +194,13 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
 
     @Override
     public void setLastRecipe(@Nullable RecipeEntry<?> recipe) {
-        lastRecipe = recipe;
+        // do nothing.
     }
 
+    @Nullable
     @Override
     public RecipeEntry<?> getLastRecipe() {
-        return lastRecipe;
+        return lastRecipe.recipe.orElse(null);
     }
 
     @Override
@@ -251,5 +271,22 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
 
     public void onContainerClose(AutoCraftingTableContainer container) {
         this.openContainers.remove(container);
+    }
+
+    static final class StoredRecipe {
+        private Optional<String> lockedRecipeNamespace = Optional.empty();
+        private Optional<String> lockedRecipePath = Optional.empty();
+        private Optional<RecipeEntry<?>> recipe = Optional.empty();
+
+        Optional<? extends RecipeEntry<?>> getRecipe(World world) {
+            if (recipe.isPresent()) {
+                return recipe;
+            }
+
+            if (lockedRecipeNamespace.isEmpty() || lockedRecipePath.isEmpty()) {
+                return Optional.empty();
+            }
+            return world.getRecipeManager().get(Identifier.of(lockedRecipeNamespace.get(), lockedRecipePath.get()));
+        }
     }
 }

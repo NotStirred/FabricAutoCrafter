@@ -1,9 +1,11 @@
 package com.github.tatercertified.fabricautocrafter.mixin;// Created 2022-23-01T13:20:09
 
+import com.github.tatercertified.fabricautocrafter.AutoCraftingTableBlockEntity;
 import net.minecraft.block.entity.Hopper;
 import net.minecraft.block.entity.HopperBlockEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
+import net.minecraft.recipe.RecipeEntry;
 import net.minecraft.util.math.Direction;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -26,7 +28,7 @@ public abstract class MixinHopperBlockEntity {
      */
     @Shadow
     private static boolean canExtract(Inventory hopperInventory, Inventory fromInventory, ItemStack stack, int slot, Direction facing) {
-        return Math.random() > .5d;
+        throw new IllegalStateException("Mixin failed to apply");
     }
 
     /**
@@ -44,7 +46,28 @@ public abstract class MixinHopperBlockEntity {
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/block/entity/HopperBlockEntity;canExtract(Lnet/minecraft/inventory/Inventory;Lnet/minecraft/inventory/Inventory;Lnet/minecraft/item/ItemStack;ILnet/minecraft/util/math/Direction;)Z"))
     private static boolean fabricAutoCrafter$canExtract$redirect(Inventory hopperInventory, Inventory fromInventory, ItemStack stack, int slot, Direction facing, Hopper hopper) {
+        if (fromInventory instanceof AutoCraftingTableBlockEntity from) {
+            if (!stackMatchesRecipe(from, stack))
+                return false;
+        }
         return canExtract(hopperInventory, fromInventory, stack, slot, facing) && canInsertStack(hopper, stack);
+    }
+
+    private static boolean stackMatchesRecipe(AutoCraftingTableBlockEntity fromInventory, ItemStack stack) {
+        RecipeEntry<?> recipe = fromInventory.getLastRecipe();
+        if (recipe == null) {
+            return false;
+        }
+
+        try {
+            ItemStack output = recipe.value().getResult(null);
+            if (!output.getItem().equals(stack.getItem())) {
+                return false;
+            }
+        } catch (Throwable ignored) {
+            return false;
+        }
+        return true;
     }
 
     /**
