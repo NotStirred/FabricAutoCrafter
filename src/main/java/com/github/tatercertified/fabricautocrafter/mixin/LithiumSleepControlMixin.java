@@ -4,6 +4,7 @@ import com.github.tatercertified.fabricautocrafter.AutoCraftingTableBlockEntity;
 import com.github.tatercertified.fabricautocrafter.AutoCraftingTableContainer;
 import com.moulberry.mixinconstraints.annotations.IfModLoaded;
 import me.jellysquid.mods.lithium.common.block.entity.SleepingBlockEntity;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -14,8 +15,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(AutoCraftingTableContainer.class)
 public class LithiumSleepControlMixin {
 
-    @Shadow
-    AutoCraftingTableBlockEntity blockEntity;
+    @Final @Shadow(remap = false)
+    private AutoCraftingTableBlockEntity blockEntity;
 
     @Inject(method = "onContentChanged", at = @At("TAIL"))
     public void injectSleep(CallbackInfo ci) {

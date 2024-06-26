@@ -25,7 +25,7 @@ import java.util.*;
 
 public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity implements SidedInventory, RecipeUnlocker, RecipeInputProvider {
 
-    private static final int[] OUTPUT_SLOTS = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    private static final int[] OUTPUT_SLOTS = {0};
     private static final int[] INPUT_SLOTS = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
     private final List<AutoCraftingTableContainer> openContainers = new ArrayList<>();
