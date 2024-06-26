@@ -8,12 +8,15 @@ import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.CraftingInventory;
 import net.minecraft.inventory.Inventories;
 import net.minecraft.inventory.SidedInventory;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtList;
 import net.minecraft.nbt.NbtString;
 import net.minecraft.recipe.*;
 import net.minecraft.recipe.input.CraftingRecipeInput;
+import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.text.Text;
@@ -26,6 +29,7 @@ import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity implements SidedInventory, RecipeUnlocker, RecipeInputProvider {
 
@@ -63,6 +67,14 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
             nbt.put("lockedRecipeNamespace", NbtString.of(id.getNamespace()));
             nbt.put("lockedRecipePath", NbtString.of(id.getPath()));
         }
+
+        if (lastRecipe.inputItems != null) {
+            NbtList inputItemsNbt = new NbtList();
+            lastRecipe.inputItems.forEach(item -> {
+                inputItemsNbt.add(NbtString.of(Registries.ITEM.getId(item).toString()));
+            });
+            nbt.put("inputStacks", inputItemsNbt);
+        }
     }
 
     @Override
@@ -78,6 +90,21 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
                 this.lastRecipe.lockedRecipeNamespace = Optional.of(lockedRecipeNamespace.asString());
                 this.lastRecipe.lockedRecipePath = Optional.of(lockedRecipePath.asString());
             }
+        }
+
+        if (nbt.contains("inputStacks")) {
+            var stacks = nbt.getList("inputStacks", NbtElement.STRING_TYPE);
+            List<Item> inputStacks = new ArrayList<>();
+
+            for (NbtElement stack : stacks) {
+                Identifier id = Identifier.tryParse(stack.asString());
+                if (id != null) {
+                    inputStacks.add(Registries.ITEM.get(id));
+                } else {
+                    AutoCrafterMod.LOGGER.error("Found invalid item in recipe: " + stack.asString());
+                }
+            }
+            this.lastRecipe.inputItems = inputStacks;
         }
     }
 
@@ -204,6 +231,10 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
         return lastRecipe.recipe.orElse(null);
     }
 
+    public Optional<List<Item>> getSpecialRecipeItems() {
+        return Optional.ofNullable(this.lastRecipe.inputItems);
+    }
+
     @Override
     public void clear() {
         this.inventory.clear();
@@ -242,6 +273,11 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
         if (optionalRecipe.isEmpty()) return ItemStack.EMPTY;
 
         final CraftingRecipe recipe = optionalRecipe.get();
+        if (recipe instanceof SpecialCraftingRecipe) {
+            lastRecipe.inputItems = craftingInventory.getHeldStacks().subList(1, craftingInventory.getHeldStacks().size()).stream().map(ItemStack::getItem).collect(Collectors.toList());
+        } else {
+            lastRecipe.inputItems = null;
+        }
         final CraftingRecipeInput input = craftingInventory.createRecipeInput();
         final ItemStack result = recipe.craft(input, this.getWorld().getRegistryManager());
         final DefaultedList<ItemStack> remaining = world.getRecipeManager().getRemainingStacks(RecipeType.CRAFTING, input, world);
@@ -278,6 +314,7 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
         private Optional<String> lockedRecipeNamespace = Optional.empty();
         private Optional<String> lockedRecipePath = Optional.empty();
         private Optional<RecipeEntry<?>> recipe = Optional.empty();
+        private List<Item> inputItems;
 
         Optional<? extends RecipeEntry<?>> getRecipe(World world) {
             if (recipe.isPresent()) {
