@@ -57,8 +57,9 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
             nbt.put("Output", output.encode(registryLookup));
         }
 
-        if (lastRecipe.recipe.isPresent()) {
-            Identifier id = lastRecipe.recipe.get().id();
+        Optional<? extends RecipeEntry<?>> recipe = lastRecipe.getRecipe(this.world);
+        if (recipe.isPresent()) {
+            Identifier id = recipe.get().id();
             nbt.put("lockedRecipeNamespace", NbtString.of(id.getNamespace()));
             nbt.put("lockedRecipePath", NbtString.of(id.getPath()));
         }
