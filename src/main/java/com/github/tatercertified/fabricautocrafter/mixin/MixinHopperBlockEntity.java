@@ -77,6 +77,7 @@ public abstract class MixinHopperBlockEntity {
      * @param test   The ItemStack in process of being transferred.
      * @return true if the hopper can fit any amount of the stack, false otherwise.
      */
+    @Unique
     private static boolean canInsertStack(Hopper hopper, ItemStack test) {
         for (int i = 0, l = hopper.size(); i < l; i++) {
             if (hopper.isValid(i, test)) {
