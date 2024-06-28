@@ -6,6 +6,7 @@
     "AccessorScreenHandler",
     "CraftingInventoryMixin",
     "LithiumBlockEntityOptimizations",
+    "LithiumMixinHopperHelper",
     "LithiumSleepControlMixin",
     "MixinHopperBlockEntity",
     "MixinHopperBlockEntity_RecipeInsertion"
