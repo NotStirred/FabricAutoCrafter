@@ -66,14 +66,12 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
             nbt.put("Output", output.encode(registryLookup));
         }
 
-        if (lastRecipe != null) {
-            lastRecipe.inputItems.ifPresent(inputItems -> {
-                NbtList inputItemsNbt = new NbtList();
-                inputItems.forEach(item ->
-                        inputItemsNbt.add(NbtString.of(Registries.ITEM.getId(item).toString()))
-                );
-                nbt.put("inputStacks", inputItemsNbt);
-            });
+        if (lastRecipe.inputItems != null) {
+            NbtList inputItemsNbt = new NbtList();
+            lastRecipe.inputItems.forEach(item ->
+                    inputItemsNbt.add(NbtString.of(Registries.ITEM.getId(item).toString()))
+            );
+            nbt.put("inputStacks", inputItemsNbt);
         }
     }
 
@@ -95,9 +93,9 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
                     AutoCrafterMod.LOGGER.error("Found invalid item in recipe: " + stack.asString());
                 }
             }
-            this.lastRecipe.inputItems = Optional.of(inputStacks);
+            this.lastRecipe.inputItems = inputStacks;
         } else {
-            this.lastRecipe.inputItems = Optional.empty();
+            this.lastRecipe.inputItems = null;
         }
     }
 
@@ -267,7 +265,7 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
     }
 
     public Optional<List<Item>> getSpecialRecipeItems() {
-        return this.lastRecipe.inputItems;
+        return Optional.ofNullable(this.lastRecipe.inputItems);
     }
 
     @Override
@@ -308,7 +306,7 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
         if (optionalRecipe.isEmpty()) return ItemStack.EMPTY;
 
         final CraftingRecipe recipe = optionalRecipe.get();
-        lastRecipe.inputItems = Optional.of(craftingInventory.getHeldStacks().subList(0, craftingInventory.getHeldStacks().size()).stream().map(ItemStack::getItem).collect(Collectors.toList()));
+        lastRecipe.inputItems = craftingInventory.getHeldStacks().subList(0, craftingInventory.getHeldStacks().size()).stream().map(ItemStack::getItem).collect(Collectors.toList());
 
         final CraftingRecipeInput.Positioned input = craftingInventory.createPositionedRecipeInput();
         final ItemStack result = recipe.craft(input.input(), this.getWorld().getRegistryManager());
@@ -351,24 +349,26 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
     }
 
     static final class StoredRecipe {
-        private Optional<RecipeEntry<CraftingRecipe>> recipe = Optional.empty();
-        private Optional<List<Item>> inputItems;
+        private RecipeEntry<CraftingRecipe> recipe;
+        private List<Item> inputItems;
 
         public Optional<RecipeEntry<CraftingRecipe>> getRecipe(World world) {
-            if (recipe.isPresent()) {
-                return recipe;
+            if (recipe != null) {
+                return Optional.of(recipe);
             }
-            if (inputItems.isPresent()) {
-                return world.getRecipeManager()
+            if (this.inputItems != null) {
+                Optional<RecipeEntry<CraftingRecipe>> firstMatch = world.getRecipeManager()
                         .getFirstMatch(
                                 RecipeType.CRAFTING,
                                 CraftingRecipeInput.create(
                                         3,
                                         3,
-                                        inputItems.get().stream().map(Item::getDefaultStack).toList()
+                                        inputItems.stream().map(Item::getDefaultStack).toList()
                                 ),
                                 world
                         );
+                this.recipe = firstMatch.orElse(null);
+                return firstMatch;
             }
             return Optional.empty();
         }
