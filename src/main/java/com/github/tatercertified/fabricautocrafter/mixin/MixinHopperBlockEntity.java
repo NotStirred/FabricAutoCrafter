@@ -9,6 +9,7 @@ import net.minecraft.recipe.RecipeEntry;
 import net.minecraft.util.math.Direction;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
@@ -53,6 +54,7 @@ public abstract class MixinHopperBlockEntity {
         return canExtract(hopperInventory, fromInventory, stack, slot, facing) && canInsertStack(hopper, stack);
     }
 
+    @Unique
     private static boolean stackMatchesRecipe(AutoCraftingTableBlockEntity fromInventory, ItemStack stack) {
         RecipeEntry<?> recipe = fromInventory.getLastRecipe();
         if (recipe == null) {

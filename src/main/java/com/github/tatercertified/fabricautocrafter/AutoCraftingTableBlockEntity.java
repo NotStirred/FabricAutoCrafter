@@ -1,6 +1,8 @@
 package com.github.tatercertified.fabricautocrafter;
 
 import com.github.tatercertified.fabricautocrafter.mixin.CraftingInventoryMixin;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntList;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.LockableContainerBlockEntity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -10,6 +12,7 @@ import net.minecraft.inventory.Inventories;
 import net.minecraft.inventory.SidedInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
@@ -30,6 +33,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static com.github.tatercertified.fabricautocrafter.LUTUtil.WIDTH_LUTS;
 
 public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity implements SidedInventory, RecipeUnlocker, RecipeInputProvider {
 
@@ -61,19 +66,14 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
             nbt.put("Output", output.encode(registryLookup));
         }
 
-        Optional<? extends RecipeEntry<?>> recipe = lastRecipe.getRecipe(this.world);
-        if (recipe.isPresent()) {
-            Identifier id = recipe.get().id();
-            nbt.put("lockedRecipeNamespace", NbtString.of(id.getNamespace()));
-            nbt.put("lockedRecipePath", NbtString.of(id.getPath()));
-        }
-
-        if (lastRecipe.inputItems != null) {
-            NbtList inputItemsNbt = new NbtList();
-            lastRecipe.inputItems.forEach(item -> {
-                inputItemsNbt.add(NbtString.of(Registries.ITEM.getId(item).toString()));
+        if (lastRecipe != null) {
+            lastRecipe.inputItems.ifPresent(inputItems -> {
+                NbtList inputItemsNbt = new NbtList();
+                inputItems.forEach(item ->
+                        inputItemsNbt.add(NbtString.of(Registries.ITEM.getId(item).toString()))
+                );
+                nbt.put("inputStacks", inputItemsNbt);
             });
-            nbt.put("inputStacks", inputItemsNbt);
         }
     }
 
@@ -82,15 +82,6 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
         super.readNbt(nbt, registryLookup);
         Inventories.readNbt(nbt, inventory, registryLookup);
         this.output = ItemStack.fromNbtOrEmpty(registryLookup, nbt.getCompound("Output"));
-
-        if (nbt.contains("lockedRecipeNamespace") && nbt.contains("lockedRecipePath")) {
-            NbtElement lockedRecipeNamespace = nbt.get("lockedRecipeNamespace");
-            NbtElement lockedRecipePath = nbt.get("lockedRecipePath");
-            if (lockedRecipeNamespace instanceof NbtString && lockedRecipePath instanceof NbtString) {
-                this.lastRecipe.lockedRecipeNamespace = Optional.of(lockedRecipeNamespace.asString());
-                this.lastRecipe.lockedRecipePath = Optional.of(lockedRecipePath.asString());
-            }
-        }
 
         if (nbt.contains("inputStacks")) {
             var stacks = nbt.getList("inputStacks", NbtElement.STRING_TYPE);
@@ -104,7 +95,9 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
                     AutoCrafterMod.LOGGER.error("Found invalid item in recipe: " + stack.asString());
                 }
             }
-            this.lastRecipe.inputItems = inputStacks;
+            this.lastRecipe.inputItems = Optional.of(inputStacks);
+        } else {
+            this.lastRecipe.inputItems = Optional.empty();
         }
     }
 
@@ -228,11 +221,53 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
     @Nullable
     @Override
     public RecipeEntry<?> getLastRecipe() {
-        return lastRecipe.recipe.orElse(null);
+        return this.lastRecipe.getRecipe(this.world).orElse(null);
+    }
+
+    public int[] getValidInsertSlotsFor(ItemStack itemToInsert) {
+        if (itemToInsert.isEmpty()) return new int[0];
+
+        RecipeEntry<?> recipeEntry = getLastRecipe();
+        if (recipeEntry == null) { // auto-crafter has no recipe, disallow insertion to all slots
+            return new int[0];
+        }
+        Recipe<?> recipe = recipeEntry.value();
+
+        List<Ingredient> ingredients = recipe.getIngredients();
+
+        int recipeWidth = 3;
+        if (recipe instanceof SpecialCraftingRecipe || recipe instanceof ShapelessRecipe) {
+            Optional<List<Item>> specialRecipeItems = this.getSpecialRecipeItems();
+            if (specialRecipeItems.isPresent()) {
+                List<Item> items = specialRecipeItems.get();
+                ingredients = items.stream().map(Ingredient::ofItems).toList();
+            }
+        } else if (recipe instanceof ShapedRecipe) {
+            // width must be > 0 && < 3
+            recipeWidth = Math.min(3, Math.max(1, ((ShapedRecipe) recipe).getWidth()));
+        }
+        int[] widthLUT = WIDTH_LUTS[recipeWidth];
+        if (ingredients.size() > widthLUT.length) { // Something has gone very wrong, exit early
+            AutoCrafterMod.LOGGER.error(String.format("Recipe has more ingredients %d than expected %d", ingredients.size(), widthLUT.length));
+            return new int[0];
+        }
+
+        IntList validSlots = new IntArrayList();
+        // given each item in this inventory, find the first stack which is valid for the recipe, and move it
+        for (int ingIdx = 0; ingIdx < ingredients.size(); ingIdx++) {
+            Ingredient ingredient = ingredients.get(ingIdx);
+            int dstIdx = widthLUT[ingIdx] + 1; // CraftingTableBlockEntity input starts at slot 1
+            ItemStack dstStack = this.getStack(dstIdx);
+            if (Arrays.stream(ingredient.getMatchingStacks()).anyMatch(ingStack -> ingStack.getItem().equals(itemToInsert.getItem()))
+                    && dstStack.getItem().equals(Items.AIR)) {
+                validSlots.add(dstIdx);
+            }
+        }
+        return validSlots.toArray(new int[0]);
     }
 
     public Optional<List<Item>> getSpecialRecipeItems() {
-        return Optional.ofNullable(this.lastRecipe.inputItems);
+        return this.lastRecipe.inputItems;
     }
 
     @Override
@@ -273,11 +308,8 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
         if (optionalRecipe.isEmpty()) return ItemStack.EMPTY;
 
         final CraftingRecipe recipe = optionalRecipe.get();
-        if (recipe instanceof SpecialCraftingRecipe || recipe instanceof ShapelessRecipe) {
-            lastRecipe.inputItems = craftingInventory.getHeldStacks().subList(0, craftingInventory.getHeldStacks().size()).stream().map(ItemStack::getItem).collect(Collectors.toList());
-        } else {
-            lastRecipe.inputItems = null;
-        }
+        lastRecipe.inputItems = Optional.of(craftingInventory.getHeldStacks().subList(0, craftingInventory.getHeldStacks().size()).stream().map(ItemStack::getItem).collect(Collectors.toList()));
+
         final CraftingRecipeInput.Positioned input = craftingInventory.createPositionedRecipeInput();
         final ItemStack result = recipe.craft(input.input(), this.getWorld().getRegistryManager());
         final DefaultedList<ItemStack> remaining = world.getRecipeManager().getRemainingStacks(RecipeType.CRAFTING, input.input(), world);
@@ -300,7 +332,12 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
             }
         }
         markDirty();
-        lastRecipe.recipe = Optional.of(new RecipeEntry<Recipe<?>>(Identifier.of(""), recipe));
+//        Collection<RecipeEntry<CraftingRecipe>> allOfType = world.getRecipeManager().getAllMatches((RecipeType<CraftingRecipe>)recipe.getType(), input.input(), this.world);
+//        RecipeEntry<CraftingRecipe> value = new RecipeEntry<>(
+//                allOfType.stream().findFirst().get().id(),
+//                recipe
+//        );
+//        lastRecipe.recipe = Optional.of(value);
         return result;
     }
 
@@ -314,20 +351,26 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
     }
 
     static final class StoredRecipe {
-        private Optional<String> lockedRecipeNamespace = Optional.empty();
-        private Optional<String> lockedRecipePath = Optional.empty();
-        private Optional<RecipeEntry<?>> recipe = Optional.empty();
-        private List<Item> inputItems;
+        private Optional<RecipeEntry<CraftingRecipe>> recipe = Optional.empty();
+        private Optional<List<Item>> inputItems;
 
-        Optional<? extends RecipeEntry<?>> getRecipe(World world) {
+        public Optional<RecipeEntry<CraftingRecipe>> getRecipe(World world) {
             if (recipe.isPresent()) {
                 return recipe;
             }
-
-            if (lockedRecipeNamespace.isEmpty() || lockedRecipePath.isEmpty()) {
-                return Optional.empty();
+            if (inputItems.isPresent()) {
+                return world.getRecipeManager()
+                        .getFirstMatch(
+                                RecipeType.CRAFTING,
+                                CraftingRecipeInput.create(
+                                        3,
+                                        3,
+                                        inputItems.get().stream().map(Item::getDefaultStack).toList()
+                                ),
+                                world
+                        );
             }
-            return world.getRecipeManager().get(Identifier.of(lockedRecipeNamespace.get(), lockedRecipePath.get()));
+            return Optional.empty();
         }
     }
 }
