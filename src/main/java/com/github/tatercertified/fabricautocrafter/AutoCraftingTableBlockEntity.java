@@ -330,12 +330,7 @@ public class AutoCraftingTableBlockEntity extends LockableContainerBlockEntity i
             }
         }
         markDirty();
-//        Collection<RecipeEntry<CraftingRecipe>> allOfType = world.getRecipeManager().getAllMatches((RecipeType<CraftingRecipe>)recipe.getType(), input.input(), this.world);
-//        RecipeEntry<CraftingRecipe> value = new RecipeEntry<>(
-//                allOfType.stream().findFirst().get().id(),
-//                recipe
-//        );
-//        lastRecipe.recipe = Optional.of(value);
+        this.lastRecipe.recipe = null; // recipe cleared and looked up on next access
         return result;
     }
 
